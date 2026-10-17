@@ -18,8 +18,8 @@ const cookiesPath = path.join(__dirname, 'cookies.txt');
 const hasCookies = fs.existsSync(cookiesPath);
 const cookiesFlag = hasCookies ? `--cookies "${cookiesPath}"` : '';
 
-// Menggunakan klien android tanpa memaksa format kaku agar lebih stabil
-const extractorArgs = "youtube:player_client=android";
+// Menggunakan kombinasi klien android dan web dengan fallback yang aman
+const extractorArgs = "youtube:player_client=android,web";
 const ytdlFlags = `${cookiesFlag} --extractor-args "${extractorArgs}" --no-check-certificates --geo-bypass`;
 
 // Endpoint Info Metadata
@@ -67,8 +67,8 @@ app.get('/convert', (req, res) => {
             videoTitle = sanitizeFilename(rawTitle.trim()) || "YToMP3_Audio";
         }
 
-        // Menghilangkan -f bestaudio agar yt-dlp otomatis memilih stream terbaik yang tersedia
-        const convertCmd = `yt-dlp ${ytdlFlags} -x --audio-format mp3 --audio-quality 0 --postprocessor-args "ffmpeg:-b:a ${bitrate}k" -o "${tempOutputPattern}" "${url}"`;
+        // Menggunakan -f "bestaudio/best" agar yt-dlp otomatis memilih stream yang tersedia dengan aman
+        const convertCmd = `yt-dlp ${ytdlFlags} -f "bestaudio/best" -x --audio-format mp3 --audio-quality 0 --postprocessor-args "ffmpeg:-b:a ${bitrate}k" -o "${tempOutputPattern}" "${url}"`;
 
         exec(convertCmd, (execErr, stdout, stderr) => {
             const finalFilePath = path.join(__dirname, `temp_${timestamp}.mp3`);
