@@ -18,11 +18,11 @@ const cookiesPath = path.resolve(__dirname, 'cookies.txt');
 const hasCookies = fs.existsSync(cookiesPath);
 const cookiesFlag = hasCookies ? `--cookies "${cookiesPath}"` : '';
 
-// Menggunakan klien web dan android standar yang selaras dengan cookies browser desktop
-const extractorArgs = "youtube:player_client=web,android";
+// Menggunakan player_client=tv untuk menghindari HTTP 403 Forbidden di server Cloud/AWS
+const extractorArgs = "youtube:player_client=tv,web";
 const ytdlFlags = `${cookiesFlag} --extractor-args "${extractorArgs}" --no-check-certificates --geo-bypass`;
 
-// Endpoint Info Metadata (Preview)
+// Endpoint Info Metadata
 app.get('/info', (req, res) => {
     let url = req.query.url ? req.query.url.trim() : '';
     if (!url) return res.status(400).json({ error: 'URL diperlukan' });
@@ -76,7 +76,7 @@ app.get('/convert', (req, res) => {
                 
                 const firstErrLine = stderr ? stderr.split('\n').find(l => l.includes('ERROR:')) || stderr.split('\n')[0] : '';
                 return res.status(500).json({ 
-                    error: `Gagal mengonversi: ${firstErrLine || 'Terjadi kesalahan pada server.'}` 
+                    error: `Gagal mengonversi: ${firstErrLine || 'HTTP 403 Forbidden (Akses stream ditolak YouTube).'}` 
                 });
             }
 
