@@ -14,13 +14,14 @@ function sanitizeFilename(filename) {
     return filename.replace(/[\/\\?%*:|"<>]/g, '').trim();
 }
 
-// Cek keberadaan file cookies.txt
+// Cek keberadaan file cookies.txt (opsional jika menggunakan klien android)
 const cookiesPath = path.join(__dirname, 'cookies.txt');
 const hasCookies = fs.existsSync(cookiesPath);
 const cookiesFlag = hasCookies ? `--cookies "${cookiesPath}"` : '';
 
-// Parameter ekstra untuk menembus proteksi bot YouTube di cloud IP
-const ytdlFlags = `${cookiesFlag} --no-check-certificates --geo-bypass`;
+// Mengakali proteksi web player YouTube dengan memaksa klien Android
+const extractorArgs = "youtube:player_client=android";
+const ytdlFlags = `${cookiesFlag} --extractor-args "${extractorArgs}" --no-check-certificates --geo-bypass`;
 
 // Endpoint Info Metadata
 app.get('/info', (req, res) => {
@@ -32,7 +33,8 @@ app.get('/info', (req, res) => {
     exec(cmd, (err, stdout, stderr) => {
         if (err) {
             console.error('Info Error (stderr):', stderr);
-            return res.status(500).json({ error: 'Gagal mengambil informasi video. Periksa URL atau perbarui file cookies.txt.' });
+            const firstErrLine = stderr ? stderr.split('\n').find(l => l.includes('ERROR:')) || stderr.split('\n')[0] : '';
+            return res.status(500).json({ error: `Gagal mengambil info: ${firstErrLine || 'Periksa URL YouTube.'}` });
         }
         const lines = stdout.trim().split('\n');
         if (lines.length < 2) {
@@ -75,10 +77,9 @@ app.get('/convert', (req, res) => {
                 console.error('Conversion Error Details (stderr):', stderr);
                 if (fs.existsSync(finalFilePath)) fs.unlinkSync(finalFilePath);
                 
-                // Ambil 2 baris pertama error asli dari yt-dlp untuk kemudahan diagnosa
                 const firstErrLine = stderr ? stderr.split('\n').find(l => l.includes('ERROR:')) || stderr.split('\n')[0] : '';
                 return res.status(500).json({ 
-                    error: `Gagal mengonversi. ${firstErrLine || 'Perbarui file cookies.txt atau yt-dlp di server.'}` 
+                    error: `Gagal mengonversi: ${firstErrLine || 'Terjadi kesalahan pada proses yt-dlp.'}` 
                 });
             }
 
@@ -92,5 +93,5 @@ app.get('/convert', (req, res) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`Server YToMP3 berjalan di port ${PORT} (Cookies: ${hasCookies ? 'Aktif' : 'Tidak Ada'})`);
+    console.log(`Server YToMP3 berjalan di port ${PORT} (Android Client Active)`);
 });
