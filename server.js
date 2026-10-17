@@ -18,7 +18,9 @@ const cookiesPath = path.resolve(__dirname, 'cookies.txt');
 const hasCookies = fs.existsSync(cookiesPath);
 const cookiesFlag = hasCookies ? `--cookies "${cookiesPath}"` : '';
 
-const ytdlFlags = `${cookiesFlag} --no-check-certificates --geo-bypass`;
+// Menggunakan kombinasi player client untuk menghindari blokir 403 pada IP Datacenter
+const extractorArgs = "youtube:player_client=android,web";
+const ytdlFlags = `${cookiesFlag} --extractor-args "${extractorArgs}" --no-check-certificates --geo-bypass`;
 
 // Endpoint Info Metadata
 app.get('/info', (req, res) => {
@@ -72,9 +74,12 @@ app.get('/convert', (req, res) => {
                 
                 const firstErrLine = stderr ? stderr.split('\n').find(l => l.includes('ERROR:')) || stderr.split('\n')[0] : '';
                 return res.status(500).json({ 
-                    error: `Gagal mengonversi: ${firstErrLine || 'Terjadi kesalahan pada server.'}` 
+                    error: `Gagal mengonversi: ${firstErrLine || 'HTTP 403 Forbidden (Akses stream ditolak YouTube).'}` 
                 });
             }
+
+            res.setHeader('Content-Type', 'audio/mpeg');
+            res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(videoTitle)}_${bitrate}kbps.mp3"`);
 
             res.download(finalFilePath, `${videoTitle}_${bitrate}kbps.mp3`, (downloadErr) => {
                 if (fs.existsSync(finalFilePath)) {
