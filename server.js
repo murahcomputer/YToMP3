@@ -20,7 +20,7 @@ const cookiesPath = path.resolve(__dirname, 'cookies.txt');
 const hasCookies = fs.existsSync(cookiesPath);
 const cookiesFlag = hasCookies ? `--cookies "${cookiesPath}"` : '';
 
-// Menggunakan player_client=web agar selaras dengan cookies browser desktop
+// Menggunakan web client (plugin bgutil-ytdlp-pot-provider otomatis menangani po-token di background)
 const extractorArgs = "youtube:player_client=web";
 const ytdlFlags = `${cookiesFlag} --extractor-args "${extractorArgs}" --no-check-certificates --geo-bypass`;
 
@@ -90,12 +90,10 @@ app.get('/convert', (req, res) => {
                 });
             }
 
-            // Atur header agar browser mengunduh berkas tanpa berpindah halaman
             res.setHeader('Content-Type', 'audio/mpeg');
             res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(videoTitle)}_${bitrate}kbps.mp3"`);
 
             res.download(finalFilePath, `${videoTitle}_${bitrate}kbps.mp3`, (downloadErr) => {
-                // Hapus file sementara setelah pengunduhan selesai
                 if (fs.existsSync(finalFilePath)) {
                     fs.unlinkSync(finalFilePath);
                 }
