@@ -18,9 +18,10 @@ const cookiesPath = path.resolve(__dirname, 'cookies.txt');
 const hasCookies = fs.existsSync(cookiesPath);
 const cookiesFlag = hasCookies ? `--cookies "${cookiesPath}"` : '';
 
-// Gunakan player client web dan android dengan cookies untuk menghindari 403 Forbidden
-const extractorArgs = "youtube:player_client=web,android";
-const ytdlFlags = `${cookiesFlag} --extractor-args "${extractorArgs}" --no-check-certificates --geo-bypass`;
+// Menggunakan klien iOS dan Web untuk menghindari blokir 403 Forbidden pada IP AWS
+const extractorArgs = "youtube:player_client=ios,web";
+const userAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1";
+const ytdlFlags = `${cookiesFlag} --user-agent "${userAgent}" --extractor-args "${extractorArgs}" --no-check-certificates --geo-bypass`;
 
 // Endpoint Info Metadata
 app.get('/info', (req, res) => {
@@ -76,7 +77,7 @@ app.get('/convert', (req, res) => {
                 
                 const firstErrLine = stderr ? stderr.split('\n').find(l => l.includes('ERROR:')) || stderr.split('\n')[0] : '';
                 return res.status(500).json({ 
-                    error: `Gagal mengonversi: ${firstErrLine || 'HTTP 403 Forbidden (Akses ditolak YouTube). Pastikan cookies.txt valid.'}` 
+                    error: `Gagal mengonversi: ${firstErrLine || 'HTTP 403 Forbidden (Akses stream ditolak YouTube).'}` 
                 });
             }
 
