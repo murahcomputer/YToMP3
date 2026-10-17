@@ -14,14 +14,13 @@ function sanitizeFilename(filename) {
     return filename.replace(/[\/\\?%*:|"<>]/g, '').trim();
 }
 
-// Gunakan path absolut untuk cookies.txt
 const cookiesPath = path.resolve(__dirname, 'cookies.txt');
 const hasCookies = fs.existsSync(cookiesPath);
 const cookiesFlag = hasCookies ? `--cookies "${cookiesPath}"` : '';
 
 const ytdlFlags = `${cookiesFlag} --no-check-certificates --geo-bypass`;
 
-// Endpoint Info Metadata
+// Endpoint Metadata Video (Preview Otomatis)
 app.get('/info', (req, res) => {
     const { url } = req.query;
     if (!url) return res.status(400).json({ error: 'URL diperlukan' });
@@ -31,7 +30,7 @@ app.get('/info', (req, res) => {
     exec(cmd, (err, stdout, stderr) => {
         if (err) {
             console.error('Info Error:', stderr);
-            return res.status(500).json({ error: 'Gagal membaca video. Pastikan file cookies.txt valid dan tidak kedaluwarsa.' });
+            return res.status(500).json({ error: 'Gagal mengambil informasi video YouTube.' });
         }
         const lines = stdout.trim().split('\n');
         if (lines.length < 2) {
@@ -76,9 +75,13 @@ app.get('/convert', (req, res) => {
                 
                 const firstErrLine = stderr ? stderr.split('\n').find(l => l.includes('ERROR:')) || stderr.split('\n')[0] : '';
                 return res.status(500).json({ 
-                    error: `Gagal mengonversi: ${firstErrLine || 'Periksa file cookies.txt Anda.'}` 
+                    error: `Gagal mengonversi: ${firstErrLine || 'Terjadi kesalahan pada server.'}` 
                 });
             }
+
+            // Set header agar file otomatis terunduh tanpa berpindah halaman
+            res.setHeader('Content-Type', 'audio/mpeg');
+            res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(videoTitle)}_${bitrate}kbps.mp3"`);
 
             res.download(finalFilePath, `${videoTitle}_${bitrate}kbps.mp3`, (downloadErr) => {
                 if (fs.existsSync(finalFilePath)) {
