@@ -10,34 +10,42 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Helper untuk membersihkan nama file dari karakter terlarang
 function sanitizeFilename(filename) {
     return filename.replace(/[\/\\?%*:|"<>]/g, '').trim();
 }
 
+// Deteksi keberadaan file cookies.txt
 const cookiesPath = path.resolve(__dirname, 'cookies.txt');
 const hasCookies = fs.existsSync(cookiesPath);
 const cookiesFlag = hasCookies ? `--cookies "${cookiesPath}"` : '';
 
-// Menggunakan player_client=web agar sinkron dengan cookies browser desktop Anda
+// Menggunakan player_client=web agar selaras dengan cookies browser desktop
 const extractorArgs = "youtube:player_client=web";
 const ytdlFlags = `${cookiesFlag} --extractor-args "${extractorArgs}" --no-check-certificates --geo-bypass`;
 
-// Endpoint Info Metadata (Preview)
+// 1. Endpoint Info Metadata (Preview Video)
 app.get('/info', (req, res) => {
     let url = req.query.url ? req.query.url.trim() : '';
-    if (!url) return res.status(400).json({ error: 'URL diperlukan' });
+    if (!url) {
+        return res.status(400).json({ error: 'URL YouTube wajib diisi!' });
+    }
 
     const cmd = `yt-dlp ${ytdlFlags} --print "%(title)s\n%(thumbnail)s\n%(duration_string)s" "${url}"`;
-    
+
     exec(cmd, (err, stdout, stderr) => {
         if (err) {
-            console.error('Info Error:', stderr);
-            return res.status(500).json({ error: 'Gagal mengambil informasi video. Periksa masa aktif cookies.txt.' });
+            console.error('Info Error Details:', stderr);
+            return res.status(500).json({ 
+                error: 'Gagal mengambil informasi video. Periksa URL atau masa berlaku cookies.txt Anda.' 
+            });
         }
+        
         const lines = stdout.trim().split('\n');
         if (lines.length < 2) {
             return res.status(500).json({ error: 'Gagal membaca metadata video.' });
         }
+
         res.json({
             title: lines[0],
             thumbnail: lines[1],
@@ -46,12 +54,14 @@ app.get('/info', (req, res) => {
     });
 });
 
-// Endpoint Konversi & Download
+// 2. Endpoint Konversi & Unduh MP3 (Background Task)
 app.get('/convert', (req, res) => {
     let url = req.query.url ? req.query.url.trim() : '';
     const quality = req.query.quality;
 
-    if (!url) return res.status(400).json({ error: 'URL YouTube wajib diisi!' });
+    if (!url) {
+        return res.status(400).json({ error: 'URL YouTube wajib diisi!' });
+    }
 
     const bitrate = quality && ['128', '192', '256', '320'].includes(quality) ? quality : '128';
     const timestamp = Date.now();
@@ -73,17 +83,19 @@ app.get('/convert', (req, res) => {
             if (execErr || !fs.existsSync(finalFilePath)) {
                 console.error('Conversion Error Details:', stderr);
                 if (fs.existsSync(finalFilePath)) fs.unlinkSync(finalFilePath);
-                
+
                 const firstErrLine = stderr ? stderr.split('\n').find(l => l.includes('ERROR:')) || stderr.split('\n')[0] : '';
                 return res.status(500).json({ 
-                    error: `Gagal mengonversi: ${firstErrLine || 'Terjadi kesalahan pada server.'}` 
+                    error: `Gagal mengonversi: ${firstErrLine || 'HTTP 403 Forbidden / Terjadi kesalahan pada server.'}` 
                 });
             }
 
+            // Atur header agar browser mengunduh berkas tanpa berpindah halaman
             res.setHeader('Content-Type', 'audio/mpeg');
             res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(videoTitle)}_${bitrate}kbps.mp3"`);
 
             res.download(finalFilePath, `${videoTitle}_${bitrate}kbps.mp3`, (downloadErr) => {
+                // Hapus file sementara setelah pengunduhan selesai
                 if (fs.existsSync(finalFilePath)) {
                     fs.unlinkSync(finalFilePath);
                 }
@@ -92,6 +104,10 @@ app.get('/convert', (req, res) => {
     });
 });
 
+// Menjalankan Server Express
 app.listen(PORT, () => {
-    console.log(`Server YToMP3 berjalan di port ${PORT} (Cookies: ${hasCookies ? 'Aktif' : 'Tidak Ada'})`);
+    console.log(`==================================================`);
+    console.log(` Server YToMP3 berjalan di port ${PORT}`);
+    console.log(` Status Cookies: ${hasCookies ? 'AKTIF (' + cookiesPath + ')' : 'TIDAK DITEMUKAN'}`);
+    console.log(`==================================================`);
 });
