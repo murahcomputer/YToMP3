@@ -14,12 +14,11 @@ function sanitizeFilename(filename) {
     return filename.replace(/[\/\\?%*:|"<>]/g, '').trim();
 }
 
-// Cek keberadaan file cookies.txt (opsional jika menggunakan klien android)
 const cookiesPath = path.join(__dirname, 'cookies.txt');
 const hasCookies = fs.existsSync(cookiesPath);
 const cookiesFlag = hasCookies ? `--cookies "${cookiesPath}"` : '';
 
-// Mengakali proteksi web player YouTube dengan memaksa klien Android
+// Menggunakan klien android tanpa memaksa format kaku agar lebih stabil
 const extractorArgs = "youtube:player_client=android";
 const ytdlFlags = `${cookiesFlag} --extractor-args "${extractorArgs}" --no-check-certificates --geo-bypass`;
 
@@ -68,7 +67,8 @@ app.get('/convert', (req, res) => {
             videoTitle = sanitizeFilename(rawTitle.trim()) || "YToMP3_Audio";
         }
 
-        const convertCmd = `yt-dlp ${ytdlFlags} -f bestaudio -x --audio-format mp3 --audio-quality 0 --postprocessor-args "ffmpeg:-b:a ${bitrate}k" -o "${tempOutputPattern}" "${url}"`;
+        // Menghilangkan -f bestaudio agar yt-dlp otomatis memilih stream terbaik yang tersedia
+        const convertCmd = `yt-dlp ${ytdlFlags} -x --audio-format mp3 --audio-quality 0 --postprocessor-args "ffmpeg:-b:a ${bitrate}k" -o "${tempOutputPattern}" "${url}"`;
 
         exec(convertCmd, (execErr, stdout, stderr) => {
             const finalFilePath = path.join(__dirname, `temp_${timestamp}.mp3`);
@@ -93,5 +93,5 @@ app.get('/convert', (req, res) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`Server YToMP3 berjalan di port ${PORT} (Android Client Active)`);
+    console.log(`Server YToMP3 berjalan di port ${PORT}`);
 });
