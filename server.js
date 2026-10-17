@@ -14,13 +14,12 @@ function sanitizeFilename(filename) {
     return filename.replace(/[\/\\?%*:|"<>]/g, '').trim();
 }
 
+// Konfigurasi Cookies wajib untuk bypass proteksi YouTube
 const cookiesPath = path.join(__dirname, 'cookies.txt');
 const hasCookies = fs.existsSync(cookiesPath);
 const cookiesFlag = hasCookies ? `--cookies "${cookiesPath}"` : '';
 
-// Menggunakan kombinasi klien android dan web dengan fallback yang aman
-const extractorArgs = "youtube:player_client=android,web";
-const ytdlFlags = `${cookiesFlag} --extractor-args "${extractorArgs}" --no-check-certificates --geo-bypass`;
+const ytdlFlags = `${cookiesFlag} --no-check-certificates --geo-bypass`;
 
 // Endpoint Info Metadata
 app.get('/info', (req, res) => {
@@ -31,9 +30,8 @@ app.get('/info', (req, res) => {
     
     exec(cmd, (err, stdout, stderr) => {
         if (err) {
-            console.error('Info Error (stderr):', stderr);
-            const firstErrLine = stderr ? stderr.split('\n').find(l => l.includes('ERROR:')) || stderr.split('\n')[0] : '';
-            return res.status(500).json({ error: `Gagal mengambil info: ${firstErrLine || 'Periksa URL YouTube.'}` });
+            console.error('Info Error:', stderr);
+            return res.status(500).json({ error: 'Gagal membaca video. Pastikan file cookies.txt valid dan tidak kedaluwarsa.' });
         }
         const lines = stdout.trim().split('\n');
         if (lines.length < 2) {
@@ -67,19 +65,18 @@ app.get('/convert', (req, res) => {
             videoTitle = sanitizeFilename(rawTitle.trim()) || "YToMP3_Audio";
         }
 
-        // Menggunakan -f "bestaudio/best" agar yt-dlp otomatis memilih stream yang tersedia dengan aman
         const convertCmd = `yt-dlp ${ytdlFlags} -f "bestaudio/best" -x --audio-format mp3 --audio-quality 0 --postprocessor-args "ffmpeg:-b:a ${bitrate}k" -o "${tempOutputPattern}" "${url}"`;
 
         exec(convertCmd, (execErr, stdout, stderr) => {
             const finalFilePath = path.join(__dirname, `temp_${timestamp}.mp3`);
 
             if (execErr || !fs.existsSync(finalFilePath)) {
-                console.error('Conversion Error Details (stderr):', stderr);
+                console.error('Conversion Error Details:', stderr);
                 if (fs.existsSync(finalFilePath)) fs.unlinkSync(finalFilePath);
                 
                 const firstErrLine = stderr ? stderr.split('\n').find(l => l.includes('ERROR:')) || stderr.split('\n')[0] : '';
                 return res.status(500).json({ 
-                    error: `Gagal mengonversi: ${firstErrLine || 'Terjadi kesalahan pada proses yt-dlp.'}` 
+                    error: `Gagal mengonversi: ${firstErrLine || 'Periksa file cookies.txt Anda.'}` 
                 });
             }
 
@@ -93,5 +90,5 @@ app.get('/convert', (req, res) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`Server YToMP3 berjalan di port ${PORT}`);
+    console.log(`Server YToMP3 berjalan di port ${PORT} (Cookies Active: ${hasCookies})`);
 });
