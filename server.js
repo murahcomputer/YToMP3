@@ -14,11 +14,15 @@ function sanitizeFilename(filename) {
     return filename.replace(/[\/\\?%*:|"<>]/g, '').trim();
 }
 
-// Sengaja dikosongkan tanpa cookies agar tidak terjadi IP Mismatch
-const extractorArgs = "youtube:player_client=android";
-const ytdlFlags = `--extractor-args "${extractorArgs}" --no-check-certificates --geo-bypass`;
+const cookiesPath = path.resolve(__dirname, 'cookies.txt');
+const hasCookies = fs.existsSync(cookiesPath);
+const cookiesFlag = hasCookies ? `--cookies "${cookiesPath}"` : '';
 
-// Endpoint Info Metadata
+// Menggunakan player_client=web agar sinkron dengan cookies browser desktop Anda
+const extractorArgs = "youtube:player_client=web";
+const ytdlFlags = `${cookiesFlag} --extractor-args "${extractorArgs}" --no-check-certificates --geo-bypass`;
+
+// Endpoint Info Metadata (Preview)
 app.get('/info', (req, res) => {
     let url = req.query.url ? req.query.url.trim() : '';
     if (!url) return res.status(400).json({ error: 'URL diperlukan' });
@@ -28,7 +32,7 @@ app.get('/info', (req, res) => {
     exec(cmd, (err, stdout, stderr) => {
         if (err) {
             console.error('Info Error:', stderr);
-            return res.status(500).json({ error: 'Gagal mengambil informasi video.' });
+            return res.status(500).json({ error: 'Gagal mengambil informasi video. Periksa masa aktif cookies.txt.' });
         }
         const lines = stdout.trim().split('\n');
         if (lines.length < 2) {
@@ -72,7 +76,7 @@ app.get('/convert', (req, res) => {
                 
                 const firstErrLine = stderr ? stderr.split('\n').find(l => l.includes('ERROR:')) || stderr.split('\n')[0] : '';
                 return res.status(500).json({ 
-                    error: `Gagal mengonversi: ${firstErrLine || 'HTTP 403 Forbidden.'}` 
+                    error: `Gagal mengonversi: ${firstErrLine || 'Terjadi kesalahan pada server.'}` 
                 });
             }
 
@@ -89,5 +93,5 @@ app.get('/convert', (req, res) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`Server YToMP3 berjalan di port ${PORT}`);
+    console.log(`Server YToMP3 berjalan di port ${PORT} (Cookies: ${hasCookies ? 'Aktif' : 'Tidak Ada'})`);
 });
