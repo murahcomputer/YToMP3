@@ -14,8 +14,8 @@ function sanitizeFilename(filename) {
     return filename.replace(/[\/\\?%*:|"<>]/g, '').trim();
 }
 
-// Konfigurasi Cookies wajib untuk bypass proteksi YouTube
-const cookiesPath = path.join(__dirname, 'cookies.txt');
+// Gunakan path absolut untuk cookies.txt
+const cookiesPath = path.resolve(__dirname, 'cookies.txt');
 const hasCookies = fs.existsSync(cookiesPath);
 const cookiesFlag = hasCookies ? `--cookies "${cookiesPath}"` : '';
 
@@ -90,5 +90,5 @@ app.get('/convert', (req, res) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`Server YToMP3 berjalan di port ${PORT} (Cookies Active: ${hasCookies})`);
+    console.log(`Server YToMP3 berjalan di port ${PORT} (Cookies: ${hasCookies ? 'Aktif' : 'Tidak Ada'})`);
 });
