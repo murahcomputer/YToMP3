@@ -1,7 +1,7 @@
 const express = require('express');
-const ytdl = require('@distube/ytdl-core');
-const ffmpeg = require('fluent-ffmpeg');
+const { exec } = require('child_process');
 const path = require('path');
+const fs = require('fs');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -11,47 +11,75 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
+function sanitizeFilename(filename) {
+    return filename.replace(/[\/\\?%*:|"<>]/g, '').trim();
+}
+
+const userAgent = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36";
+const extractorArgs = "youtube:player_client=android,web_safari";
+
+// Endpoint untuk mengambil Metadata Video (Interaktif Preview)
+app.get('/info', (req, res) => {
+    const { url } = req.query;
+    if (!url) return res.status(400).json({ error: 'URL diperlukan' });
+
+    const cmd = `yt-dlp --user-agent "${userAgent}" --extractor-args "${extractorArgs}" --print "%(title)s\n%(thumbnail)s\n%(duration_string)s" "${url}"`;
+    
+    exec(cmd, (err, stdout) => {
+        if (err) {
+            return res.status(500).json({ error: 'Gagal mengambil informasi video. Pastikan URL valid.' });
+        }
+        const lines = stdout.trim().split('\n');
+        if (lines.length < 2) {
+            return res.status(500).json({ error: 'Gagal membaca metadata video.' });
+        }
+        res.json({
+            title: lines[0],
+            thumbnail: lines[1],
+            duration: lines[2] || 'N/A'
+        });
+    });
+});
+
 // Endpoint Konversi & Download
-app.get('/convert', async (req, res) => {
+app.get('/convert', (req, res) => {
     const { url, quality } = req.query;
 
-    if (!url || !ytdl.validateURL(url)) {
-        return res.status(400).json({ error: 'URL YouTube tidak valid!' });
+    if (!url) {
+        return res.status(400).json({ error: 'URL YouTube wajib diisi!' });
     }
 
-    try {
-        // Ambil informasi video untuk judul file
-        const info = await ytdl.getInfo(url);
-        let title = info.videoDetails.title.replace(/[\/\\?%*:|"<>]/g, ''); // Bersihkan karakter ilegal
-        
-        // Pilih bitrate (default 128 kbps jika tidak dipilih)
-        const bitrate = quality && ['128', '192', '256', '320'].includes(quality) ? quality : '128';
+    const bitrate = quality && ['128', '192', '256', '320'].includes(quality) ? quality : '128';
+    const timestamp = Date.now();
+    const tempOutputPattern = path.join(__dirname, `temp_${timestamp}.%(ext)s`);
 
-        // Set Header untuk Download File MP3
-        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(title)}_${bitrate}kbps.mp3"`);
-        res.setHeader('Content-Type', 'audio/mpeg');
+    const titleCmd = `yt-dlp --user-agent "${userAgent}" --extractor-args "${extractorArgs}" --get-title "${url}"`;
 
-        // Stream audio dari YouTube
-        const audioStream = ytdl(url, { quality: 'highestaudio' });
-
-        // Proses konversi menggunakan FFmpeg
-        ffmpeg(audioStream)
-            .audioBitrate(bitrate)
-            .toFormat('mp3')
-            .on('error', (err) => {
-                console.error('FFmpeg Error:', err.message);
-                if (!res.headersSent) {
-                    res.status(500).json({ error: 'Terjadi kesalahan saat memproses audio.' });
-                }
-            })
-            .pipe(res, { end: true });
-
-    } catch (error) {
-        console.error('Conversion Error:', error.message);
-        if (!res.headersSent) {
-            res.status(500).json({ error: 'Gagal mengambil data video YouTube.' });
+    exec(titleCmd, (titleError, rawTitle) => {
+        let videoTitle = "YToMP3_Audio";
+        if (!titleError && rawTitle) {
+            videoTitle = sanitizeFilename(rawTitle.trim()) || "YToMP3_Audio";
         }
-    }
+
+        const convertCmd = `yt-dlp --user-agent "${userAgent}" --extractor-args "${extractorArgs}" -f bestaudio -x --audio-format mp3 --audio-quality 0 --postprocessor-args "ffmpeg:-b:a ${bitrate}k" -o "${tempOutputPattern}" "${url}"`;
+
+        exec(convertCmd, (execErr) => {
+            const finalFilePath = path.join(__dirname, `temp_${timestamp}.mp3`);
+
+            if (execErr || !fs.existsSync(finalFilePath)) {
+                if (fs.existsSync(finalFilePath)) fs.unlinkSync(finalFilePath);
+                return res.status(500).json({ 
+                    error: 'Gagal mengonversi video. Terjadi proteksi pada IP server.' 
+                });
+            }
+
+            res.download(finalFilePath, `${videoTitle}_${bitrate}kbps.mp3`, (downloadErr) => {
+                if (fs.existsSync(finalFilePath)) {
+                    fs.unlinkSync(finalFilePath);
+                }
+            });
+        });
+    });
 });
 
 app.listen(PORT, () => {

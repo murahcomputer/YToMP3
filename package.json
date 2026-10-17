@@ -1,14 +1,12 @@
 {
   "name": "ytomp3",
   "version": "1.0.0",
-  "description": "YouTube to MP3 Converter web app",
+  "description": "YouTube to MP3 Converter Web App",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
-    "@distube/ytdl-core": "^4.16.4",
-    "express": "^4.19.2",
-    "fluent-ffmpeg": "^2.1.3"
+    "express": "^4.19.2"
   }
 }
