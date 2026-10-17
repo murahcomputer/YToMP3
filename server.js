@@ -6,7 +6,6 @@ const fs = require('fs');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
@@ -15,19 +14,24 @@ function sanitizeFilename(filename) {
     return filename.replace(/[\/\\?%*:|"<>]/g, '').trim();
 }
 
-const userAgent = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36";
+const userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 const extractorArgs = "youtube:player_client=android,web_safari";
 
-// Endpoint untuk mengambil Metadata Video (Interaktif Preview)
+// Cek otomatis file cookies.txt untuk bypass proteksi IP server cloud (AWS)
+const cookiesPath = path.join(__dirname, 'cookies.txt');
+const cookiesFlag = fs.existsSync(cookiesPath) ? `--cookies "${cookiesPath}"` : '';
+
+// Endpoint Info Metadata
 app.get('/info', (req, res) => {
     const { url } = req.query;
     if (!url) return res.status(400).json({ error: 'URL diperlukan' });
 
-    const cmd = `yt-dlp --user-agent "${userAgent}" --extractor-args "${extractorArgs}" --print "%(title)s\n%(thumbnail)s\n%(duration_string)s" "${url}"`;
+    const cmd = `yt-dlp ${cookiesFlag} --user-agent "${userAgent}" --extractor-args "${extractorArgs}" --print "%(title)s\n%(thumbnail)s\n%(duration_string)s" "${url}"`;
     
-    exec(cmd, (err, stdout) => {
+    exec(cmd, (err, stdout, stderr) => {
         if (err) {
-            return res.status(500).json({ error: 'Gagal mengambil informasi video. Pastikan URL valid.' });
+            console.error('Info Error:', stderr);
+            return res.status(500).json({ error: 'Gagal mengambil informasi video. Periksa URL atau pasang cookies.txt.' });
         }
         const lines = stdout.trim().split('\n');
         if (lines.length < 2) {
@@ -53,7 +57,7 @@ app.get('/convert', (req, res) => {
     const timestamp = Date.now();
     const tempOutputPattern = path.join(__dirname, `temp_${timestamp}.%(ext)s`);
 
-    const titleCmd = `yt-dlp --user-agent "${userAgent}" --extractor-args "${extractorArgs}" --get-title "${url}"`;
+    const titleCmd = `yt-dlp ${cookiesFlag} --user-agent "${userAgent}" --extractor-args "${extractorArgs}" --get-title "${url}"`;
 
     exec(titleCmd, (titleError, rawTitle) => {
         let videoTitle = "YToMP3_Audio";
@@ -61,15 +65,16 @@ app.get('/convert', (req, res) => {
             videoTitle = sanitizeFilename(rawTitle.trim()) || "YToMP3_Audio";
         }
 
-        const convertCmd = `yt-dlp --user-agent "${userAgent}" --extractor-args "${extractorArgs}" -f bestaudio -x --audio-format mp3 --audio-quality 0 --postprocessor-args "ffmpeg:-b:a ${bitrate}k" -o "${tempOutputPattern}" "${url}"`;
+        const convertCmd = `yt-dlp ${cookiesFlag} --user-agent "${userAgent}" --extractor-args "${extractorArgs}" -f bestaudio -x --audio-format mp3 --audio-quality 0 --postprocessor-args "ffmpeg:-b:a ${bitrate}k" -o "${tempOutputPattern}" "${url}"`;
 
-        exec(convertCmd, (execErr) => {
+        exec(convertCmd, (execErr, stdout, stderr) => {
             const finalFilePath = path.join(__dirname, `temp_${timestamp}.mp3`);
 
             if (execErr || !fs.existsSync(finalFilePath)) {
+                console.error('Conversion Error:', stderr);
                 if (fs.existsSync(finalFilePath)) fs.unlinkSync(finalFilePath);
                 return res.status(500).json({ 
-                    error: 'Gagal mengonversi video. Terjadi proteksi pada IP server.' 
+                    error: 'Proteksi IP AWS terdeteksi. Silakan tambahkan file cookies.txt ke server.' 
                 });
             }
 

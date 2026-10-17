@@ -4,16 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>YToMP3 - High Quality YouTube to MP3 Converter</title>
-    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
-        body { font-family: 'Plus Jakarta+ Sans', sans-serif; }
+        body { font-family: 'Plus Jakarta Sans', sans-serif; }
     </style>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col justify-between selection:bg-purple-500 selection:text-white">
 
-    <!-- Background Glow Effects -->
+    <!-- Glow Background -->
     <div class="fixed inset-0 overflow-hidden pointer-events-none z-0">
         <div class="absolute -top-40 -left-40 w-96 h-96 bg-purple-600/15 rounded-full blur-3xl"></div>
         <div class="absolute top-1/2 -right-40 w-96 h-96 bg-red-600/15 rounded-full blur-3xl"></div>
@@ -54,7 +53,7 @@
                     </div>
                 </div>
 
-                <!-- Live Preview Card (Interaktif) -->
+                <!-- Live Preview Card -->
                 <div id="previewCard" class="hidden transform transition-all duration-300 ease-out bg-slate-950/60 border border-slate-800/80 rounded-2xl p-3.5 flex items-center space-x-4">
                     <img id="previewThumb" src="" alt="Thumbnail" class="w-24 h-16 object-cover rounded-xl shadow-md border border-slate-800 flex-shrink-0">
                     <div class="flex-grow min-w-0">
@@ -64,7 +63,7 @@
                     </div>
                 </div>
 
-                <!-- Quality Selection (Pill Options) -->
+                <!-- Quality Selection (Pill) -->
                 <div>
                     <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Pilih Kualitas Audio (Bitrate)</label>
                     <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -103,7 +102,7 @@
                 </button>
             </form>
 
-            <!-- Loading & Step Indicator -->
+            <!-- Loading & Status -->
             <div id="loading" class="hidden mt-6 text-center space-y-3">
                 <div class="inline-block animate-spin rounded-full h-7 w-7 border-3 border-purple-500 border-t-transparent"></div>
                 <p id="loadingStatus" class="text-xs font-medium text-purple-300 animate-pulse">Menghubungkan ke server...</p>
@@ -119,7 +118,7 @@
         &copy; 2026 YToMP3 &bull; Fast, Secure & Free YouTube Converter
     </footer>
 
-    <!-- Script Interaktif Frontend -->
+    <!-- Frontend Script -->
     <script>
         const urlInput = document.getElementById('url');
         const clearBtn = document.getElementById('clearBtn');
@@ -137,7 +136,6 @@
 
         let debounceTimer;
 
-        // Auto Fetch Metadata saat URL dimasukkan
         urlInput.addEventListener('input', () => {
             const url = urlInput.value.trim();
             clearBtn.classList.toggle('hidden', url.length === 0);
@@ -171,8 +169,7 @@
             urlInput.focus();
         });
 
-        // Form Submit Handler dengan Simulasi Step Status
-        form.addEventListener('submit', (e) => {
+        form.addEventListener('submit', async (e) => {
             e.preventDefault();
             const url = urlInput.value.trim();
             const quality = document.querySelector('input[name="quality"]:checked').value;
@@ -184,20 +181,48 @@
             submitBtn.disabled = true;
             btnText.textContent = 'Memproses...';
 
-            // Simulasi urutan status interaktif
-            setTimeout(() => { loadingStatus.textContent = "Mengunduh stream audio dari YouTube..."; }, 1200);
-            setTimeout(() => { loadingStatus.textContent = `Mengonversi ke MP3 (${quality} kbps)...`; }, 3500);
+            setTimeout(() => { loadingStatus.textContent = "Mengunduh stream audio dari YouTube..."; }, 1000);
+            setTimeout(() => { loadingStatus.textContent = `Mengonversi ke MP3 (${quality} kbps)...`; }, 3000);
 
-            const downloadUrl = `/convert?url=${encodeURIComponent(url)}&quality=${quality}`;
-            window.location.href = downloadUrl;
+            try {
+                const response = await fetch(`/convert?url=${encodeURIComponent(url)}&quality=${quality}`);
+                
+                if (!response.ok) {
+                    const errData = await response.json();
+                    throw new Error(errData.error || 'Terjadi kesalahan pada server.');
+                }
 
-            // Reset UI setelah beberapa detik
-            setTimeout(() => {
+                // Trigger file download via blob
+                const blob = await response.blob();
+                const contentDisposition = response.headers.get('Content-Disposition');
+                let filename = `YToMP3_${quality}kbps.mp3`;
+                
+                if (contentDisposition && contentDisposition.includes('filename=')) {
+                    const match = contentDisposition.match(/filename="?([^"]+)"?/);
+                    if (match && match[1]) filename = decodeURIComponent(match[1]);
+                }
+
+                const blobUrl = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = blobUrl;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(blobUrl);
+
                 loading.classList.add('hidden');
                 submitBtn.disabled = false;
                 btnText.textContent = 'Konversi & Unduh MP3';
                 loadingStatus.textContent = "Menghubungkan ke server...";
-            }, 7000);
+
+            } catch (err) {
+                loading.classList.add('hidden');
+                submitBtn.disabled = false;
+                btnText.textContent = 'Konversi & Unduh MP3';
+                errorMsg.textContent = err.message;
+                errorMsg.classList.remove('hidden');
+            }
         });
     </script>
 </body>
