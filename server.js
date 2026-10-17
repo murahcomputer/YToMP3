@@ -14,13 +14,9 @@ function sanitizeFilename(filename) {
     return filename.replace(/[\/\\?%*:|"<>]/g, '').trim();
 }
 
-const cookiesPath = path.resolve(__dirname, 'cookies.txt');
-const hasCookies = fs.existsSync(cookiesPath);
-const cookiesFlag = hasCookies ? `--cookies "${cookiesPath}"` : '';
-
-// Menggunakan argumen standar yang aman
-const extractorArgs = "youtube:player_client=web";
-const ytdlFlags = `${cookiesFlag} --extractor-args "${extractorArgs}" --no-check-certificates --geo-bypass`;
+// Sengaja dikosongkan tanpa cookies agar tidak terjadi IP Mismatch
+const extractorArgs = "youtube:player_client=android";
+const ytdlFlags = `--extractor-args "${extractorArgs}" --no-check-certificates --geo-bypass`;
 
 // Endpoint Info Metadata
 app.get('/info', (req, res) => {
@@ -32,7 +28,7 @@ app.get('/info', (req, res) => {
     exec(cmd, (err, stdout, stderr) => {
         if (err) {
             console.error('Info Error:', stderr);
-            return res.status(500).json({ error: 'Gagal mengambil informasi video. Periksa URL atau cookies.txt.' });
+            return res.status(500).json({ error: 'Gagal mengambil informasi video.' });
         }
         const lines = stdout.trim().split('\n');
         if (lines.length < 2) {
@@ -65,8 +61,7 @@ app.get('/convert', (req, res) => {
             videoTitle = sanitizeFilename(rawTitle.trim()) || "YToMP3_Audio";
         }
 
-        // Menggunakan -f "18/22/best" (Progressive stream) untuk menghindari HTTP 403 Forbidden di AWS EC2
-        const convertCmd = `yt-dlp ${ytdlFlags} -f "18/22/best" -x --audio-format mp3 --audio-quality 0 --postprocessor-args "ffmpeg:-b:a ${bitrate}k" -o "${tempOutputPattern}" "${url}"`;
+        const convertCmd = `yt-dlp ${ytdlFlags} -f "bestaudio/best" -x --audio-format mp3 --audio-quality 0 --postprocessor-args "ffmpeg:-b:a ${bitrate}k" -o "${tempOutputPattern}" "${url}"`;
 
         exec(convertCmd, (execErr, stdout, stderr) => {
             const finalFilePath = path.join(__dirname, `temp_${timestamp}.mp3`);
@@ -77,7 +72,7 @@ app.get('/convert', (req, res) => {
                 
                 const firstErrLine = stderr ? stderr.split('\n').find(l => l.includes('ERROR:')) || stderr.split('\n')[0] : '';
                 return res.status(500).json({ 
-                    error: `Gagal mengonversi: ${firstErrLine || 'HTTP 403 Forbidden (Akses stream ditolak YouTube).'}` 
+                    error: `Gagal mengonversi: ${firstErrLine || 'HTTP 403 Forbidden.'}` 
                 });
             }
 
