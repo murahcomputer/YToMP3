@@ -18,13 +18,13 @@ const cookiesPath = path.resolve(__dirname, 'cookies.txt');
 const hasCookies = fs.existsSync(cookiesPath);
 const cookiesFlag = hasCookies ? `--cookies "${cookiesPath}"` : '';
 
-// Menggunakan kombinasi player client untuk menghindari blokir 403 pada IP Datacenter
-const extractorArgs = "youtube:player_client=android,web";
+// Gunakan player client web dan android dengan cookies untuk menghindari 403 Forbidden
+const extractorArgs = "youtube:player_client=web,android";
 const ytdlFlags = `${cookiesFlag} --extractor-args "${extractorArgs}" --no-check-certificates --geo-bypass`;
 
 // Endpoint Info Metadata
 app.get('/info', (req, res) => {
-    const { url } = req.query;
+    let url = req.query.url ? req.query.url.trim() : '';
     if (!url) return res.status(400).json({ error: 'URL diperlukan' });
 
     const cmd = `yt-dlp ${ytdlFlags} --print "%(title)s\n%(thumbnail)s\n%(duration_string)s" "${url}"`;
@@ -32,7 +32,7 @@ app.get('/info', (req, res) => {
     exec(cmd, (err, stdout, stderr) => {
         if (err) {
             console.error('Info Error:', stderr);
-            return res.status(500).json({ error: 'Gagal mengambil informasi video.' });
+            return res.status(500).json({ error: 'Gagal mengambil informasi video. Periksa URL atau cookies.txt.' });
         }
         const lines = stdout.trim().split('\n');
         if (lines.length < 2) {
@@ -48,7 +48,9 @@ app.get('/info', (req, res) => {
 
 // Endpoint Konversi & Download
 app.get('/convert', (req, res) => {
-    const { url, quality } = req.query;
+    let url = req.query.url ? req.query.url.trim() : '';
+    const quality = req.query.quality;
+
     if (!url) return res.status(400).json({ error: 'URL YouTube wajib diisi!' });
 
     const bitrate = quality && ['128', '192', '256', '320'].includes(quality) ? quality : '128';
@@ -74,7 +76,7 @@ app.get('/convert', (req, res) => {
                 
                 const firstErrLine = stderr ? stderr.split('\n').find(l => l.includes('ERROR:')) || stderr.split('\n')[0] : '';
                 return res.status(500).json({ 
-                    error: `Gagal mengonversi: ${firstErrLine || 'HTTP 403 Forbidden (Akses stream ditolak YouTube).'}` 
+                    error: `Gagal mengonversi: ${firstErrLine || 'HTTP 403 Forbidden (Akses ditolak YouTube). Pastikan cookies.txt valid.'}` 
                 });
             }
 
