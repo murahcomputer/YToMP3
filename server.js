@@ -10,19 +10,17 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Helper untuk membersihkan nama file dari karakter terlarang
 function sanitizeFilename(filename) {
     return filename.replace(/[\/\\?%*:|"<>]/g, '').trim();
 }
 
-// Deteksi keberadaan file cookies.txt
 const cookiesPath = path.resolve(__dirname, 'cookies.txt');
 const hasCookies = fs.existsSync(cookiesPath);
 const cookiesFlag = hasCookies ? `--cookies "${cookiesPath}"` : '';
 
-// Menggunakan web client (plugin bgutil-ytdlp-pot-provider otomatis menangani po-token di background)
+// Menambahkan --remote-components ejs:github untuk mengatasi JavaScript challenge YouTube
 const extractorArgs = "youtube:player_client=web";
-const ytdlFlags = `${cookiesFlag} --extractor-args "${extractorArgs}" --no-check-certificates --geo-bypass`;
+const ytdlFlags = `${cookiesFlag} --extractor-args "${extractorArgs}" --remote-components ejs:github --no-check-certificates --geo-bypass`;
 
 // 1. Endpoint Info Metadata (Preview Video)
 app.get('/info', (req, res) => {
@@ -86,7 +84,7 @@ app.get('/convert', (req, res) => {
 
                 const firstErrLine = stderr ? stderr.split('\n').find(l => l.includes('ERROR:')) || stderr.split('\n')[0] : '';
                 return res.status(500).json({ 
-                    error: `Gagal mengonversi: ${firstErrLine || 'HTTP 403 Forbidden / Terjadi kesalahan pada server.'}` 
+                    error: `Gagal mengonversi: ${firstErrLine || 'Terjadi kesalahan pada server.'}` 
                 });
             }
 
