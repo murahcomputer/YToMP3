@@ -3,6 +3,7 @@ const { exec, spawn } = require('child_process');
 const path = require('path');
 const cors = require('cors');
 const fs = require('fs');
+const crypto = require('crypto');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -11,11 +12,9 @@ app.use(cors());
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
 
-// Jalur absolut ke yt-dlp di virtual environment Python
 const YT_DLP_PATH = '/home/ubuntu/bgutil-env/bin/yt-dlp';
 const COOKIES_PATH = path.join(__dirname, 'cookies.txt');
 
-// Endpoint /info: Mengambil metadata video (judul, thumbnail, durasi)
 app.get('/info', (req, res) => {
     const videoUrl = req.query.url;
     if (!videoUrl) {
@@ -42,55 +41,67 @@ app.get('/info', (req, res) => {
     });
 });
 
-// Endpoint /convert: Mengunduh, mengonversi ke MP3 secara dinamis, dan mengalirkan ke klien
+// Endpoint /convert menggunakan metode file temporer (100% stabil)
 app.get('/convert', (req, res) => {
     const videoUrl = req.query.url;
-    // Menangkap parameter quality secara dinamis dari query (default ke '128' jika tidak diset)
     const quality = req.query.quality || '128';
 
     if (!videoUrl) {
         return res.status(400).json({ error: 'URL video tidak boleh kosong' });
     }
 
-    // Ambil judul video untuk penamaan file unduhan yang bersih
-    const infoCmd = `"${YT_DLP_PATH}" --cookies "${COOKIES_PATH}" --get-title --no-playlist "${videoUrl}"`;
-    
-    exec(infoCmd, (err, titleStdout) => {
-        let safeTitle = 'audio_download';
-        if (!err && titleStdout) {
-            safeTitle = titleStdout.trim().replace(/[^\w\s-]/gi, '').replace(/\s+/g, '_');
+    // Buat nama file unik untuk mencegah bentrok antar pengguna
+    const uniqueId = crypto.randomBytes(6).toString('hex');
+    const outputTemplate = path.join(__dirname, `audio_${uniqueId}.%(ext)s`);
+
+    const ytProcess = spawn(YT_DLP_PATH, [
+        '--cookies', COOKIES_PATH,
+        '--extractor-args', 'youtube:player_client=web;pot-provider=bgutil:script',
+        '--remote-components', 'ejs:github',
+        '-x',
+        '--audio-format', 'mp3',
+        '--audio-quality', `${quality}K`,
+        '-o', outputTemplate,
+        videoUrl
+    ]);
+
+    ytProcess.stderr.on('data', (data) => {
+        console.error(`yt-dlp stderr: ${data}`);
+    });
+
+    ytProcess.on('close', (code) => {
+        if (code !== 0) {
+            return res.status(500).json({ error: 'Gagal mengonversi video ke MP3.' });
         }
 
-        res.setHeader('Content-Disposition', `attachment; filename="${safeTitle}.mp3"`);
-        res.setHeader('Content-Type', 'audio/mpeg');
-
-        // Jalankan yt-dlp dengan argumen penangkal blokir dan kualitas dinamis
-        const ytProcess = spawn(YT_DLP_PATH, [
-            '--cookies', COOKIES_PATH,
-            '--extractor-args', 'youtube:player_client=web;pot-provider=bgutil:script',
-            '--remote-components', 'ejs:github',
-            '-x',
-            '--audio-format', 'mp3',
-            '--audio-quality', `${quality}K`, // Menggunakan kualitas pilihan user (misal: 128K, 192K, 320K)
-            '-o', '-',
-            videoUrl
-        ]);
-
-        ytProcess.stdout.pipe(res);
-
-        ytProcess.stderr.on('data', (data) => {
-            console.error(`yt-dlp stderr: ${data}`);
-        });
-
-        ytProcess.on('close', (code) => {
-            if (code !== 0 && !res.headersSent) {
-                res.status(500).json({ error: 'Gagal mengonversi video ke MP3.' });
+        // Cari file MP3 hasil konversi di direktori
+        fs.readdir(__dirname, (err, files) => {
+            if (err) {
+                return res.status(500).json({ error: 'Gagal membaca direktori server.' });
             }
-        });
 
-        req.on('close', () => {
-            ytProcess.kill();
+            const targetFile = files.find(f => f.startsWith(`audio_${uniqueId}`) && f.endsWith('.mp3'));
+            if (!targetFile) {
+                return res.status(500).json({ error: 'File MP3 hasil konversi tidak ditemukan.' });
+            }
+
+            const filePath = path.join(__dirname, targetFile);
+
+            // Kirim file ke klien, lalu hapus setelah selesai dikirim
+            res.download(filePath, targetFile.replace(`audio_${uniqueId}_`, ''), (downloadErr) => {
+                if (downloadErr) {
+                    console.error('Error saat mengirim file:', downloadErr);
+                }
+                // Hapus file temporer dari server
+                fs.unlink(filePath, (unlinkErr) => {
+                    if (unlinkErr) console.error('Gagal menghapus file temporer:', unlinkErr);
+                });
+            });
         });
+    });
+
+    req.on('close', () => {
+        ytProcess.kill();
     });
 });
 
