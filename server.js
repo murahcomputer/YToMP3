@@ -10,6 +10,9 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Jalur absolut yt-dlp di dalam virtual environment bgutil-env
+const ytdlpPath = '/home/ubuntu/bgutil-env/bin/yt-dlp';
+
 function sanitizeFilename(filename) {
     return filename.replace(/[\/\\?%*:|"<>]/g, '').trim();
 }
@@ -18,7 +21,6 @@ const cookiesPath = path.resolve(__dirname, 'cookies.txt');
 const hasCookies = fs.existsSync(cookiesPath);
 const cookiesFlag = hasCookies ? `--cookies "${cookiesPath}"` : '';
 
-// Menambahkan --remote-components ejs:github untuk mengatasi JavaScript challenge YouTube
 const extractorArgs = "youtube:player_client=web";
 const ytdlFlags = `${cookiesFlag} --extractor-args "${extractorArgs}" --remote-components ejs:github --no-check-certificates --geo-bypass`;
 
@@ -29,7 +31,7 @@ app.get('/info', (req, res) => {
         return res.status(400).json({ error: 'URL YouTube wajib diisi!' });
     }
 
-    const cmd = `yt-dlp ${ytdlFlags} --print "%(title)s\n%(thumbnail)s\n%(duration_string)s" "${url}"`;
+    const cmd = `${ytdlpPath} ${ytdlFlags} --print "%(title)s\n%(thumbnail)s\n%(duration_string)s" "${url}"`;
 
     exec(cmd, (err, stdout, stderr) => {
         if (err) {
@@ -65,7 +67,7 @@ app.get('/convert', (req, res) => {
     const timestamp = Date.now();
     const tempOutputPattern = path.join(__dirname, `temp_${timestamp}.%(ext)s`);
 
-    const titleCmd = `yt-dlp ${ytdlFlags} --get-title "${url}"`;
+    const titleCmd = `${ytdlpPath} ${ytdlFlags} --get-title "${url}"`;
 
     exec(titleCmd, (titleError, rawTitle) => {
         let videoTitle = "YToMP3_Audio";
@@ -73,7 +75,7 @@ app.get('/convert', (req, res) => {
             videoTitle = sanitizeFilename(rawTitle.trim()) || "YToMP3_Audio";
         }
 
-        const convertCmd = `yt-dlp ${ytdlFlags} -f "bestaudio/best" -x --audio-format mp3 --audio-quality 0 --postprocessor-args "ffmpeg:-b:a ${bitrate}k" -o "${tempOutputPattern}" "${url}"`;
+        const convertCmd = `${ytdlpPath} ${ytdlFlags} -f "bestaudio/best" -x --audio-format mp3 --audio-quality 0 --postprocessor-args "ffmpeg:-b:a ${bitrate}k" -o "${tempOutputPattern}" "${url}"`;
 
         exec(convertCmd, (execErr, stdout, stderr) => {
             const finalFilePath = path.join(__dirname, `temp_${timestamp}.mp3`);
