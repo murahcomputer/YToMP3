@@ -21,7 +21,7 @@ const cookiesPath = path.resolve(__dirname, 'cookies.txt');
 const hasCookies = fs.existsSync(cookiesPath);
 const cookiesFlag = hasCookies ? `--cookies "${cookiesPath}"` : '';
 
-const extractorArgs = "youtube:player_client=web;pot-provider=";
+const extractorArgs = "youtube:player_client=web;pot-provider=bgutil:script";
 const ytdlFlags = `${cookiesFlag} --extractor-args "${extractorArgs}" --remote-components ejs:github --no-check-certificates --geo-bypass`;
 
 // 1. Endpoint Info Metadata (Preview Video)
