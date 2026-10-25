@@ -42,9 +42,12 @@ app.get('/info', (req, res) => {
     });
 });
 
-// Endpoint /convert: Mengunduh, mengonversi ke MP3, dan mengalirkan hasilnya ke klien
+// Endpoint /convert: Mengunduh, mengonversi ke MP3 secara dinamis, dan mengalirkan ke klien
 app.get('/convert', (req, res) => {
     const videoUrl = req.query.url;
+    // Menangkap parameter quality secara dinamis dari query (default ke '128' jika tidak diset)
+    const quality = req.query.quality || '128';
+
     if (!videoUrl) {
         return res.status(400).json({ error: 'URL video tidak boleh kosong' });
     }
@@ -61,12 +64,14 @@ app.get('/convert', (req, res) => {
         res.setHeader('Content-Disposition', `attachment; filename="${safeTitle}.mp3"`);
         res.setHeader('Content-Type', 'audio/mpeg');
 
-        // Jalankan yt-dlp untuk ekstrak audio dan pipe langsung ke response
+        // Jalankan yt-dlp dengan argumen penangkal blokir dan kualitas dinamis
         const ytProcess = spawn(YT_DLP_PATH, [
             '--cookies', COOKIES_PATH,
+            '--extractor-args', 'youtube:player_client=web;pot-provider=bgutil:script',
+            '--remote-components', 'ejs:github',
             '-x',
             '--audio-format', 'mp3',
-            '--audio-quality', '128K',
+            '--audio-quality', `${quality}K`, // Menggunakan kualitas pilihan user (misal: 128K, 192K, 320K)
             '-o', '-',
             videoUrl
         ]);
